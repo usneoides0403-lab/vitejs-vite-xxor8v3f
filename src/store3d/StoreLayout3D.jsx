@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StoreScene } from './scene.js';
 import { CATALOG } from './fixtures.js';
 import { PRESETS, makeItem, findFreeSpot } from './presets.js';
+import { saveFile, dataUrlToBlob } from './saveFile.js';
 import './store3d.css';
 
 const STORAGE_KEY = 'store-layout-3d-v1';
@@ -377,25 +378,25 @@ export default function StoreLayout3D() {
     }
   }
 
-  function download(name, href) {
-    const a = document.createElement('a');
-    a.href = href;
-    a.download = name;
-    a.click();
+  async function save(name, blob) {
+    try {
+      const res = await saveFile(name, blob);
+      if (res === 'saved') showToast(`${name} を保存しました`);
+    } catch (err) {
+      showToast('保存できません: ' + err.message);
+    }
   }
 
   function downloadJson() {
-    const blob = new Blob([JSON.stringify(doc, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    download('store-layout.json', url);
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    save(
+      'store-layout.json',
+      new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
+    );
   }
 
   function downloadPng() {
     const data = sceneRef.current?.snapshot();
-    if (data) download('store-layout.png', data);
+    if (data) save('store-layout.png', dataUrlToBlob(data));
   }
 
   function loadPreset(key) {
