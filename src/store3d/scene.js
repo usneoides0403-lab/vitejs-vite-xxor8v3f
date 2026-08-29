@@ -159,7 +159,10 @@ export class StoreScene {
     this._onPointerDown = this.onPointerDown.bind(this);
     this._onPointerMove = this.onPointerMove.bind(this);
     this._onPointerUp = this.onPointerUp.bind(this);
-    this._onKeyDown = (e) => this.keys.add(e.code);
+    this._onKeyDown = (e) => {
+      if (document.body.dataset.modal) return;
+      this.keys.add(e.code);
+    };
     this._onKeyUp = (e) => this.keys.delete(e.code);
 
     const el = renderer.domElement;

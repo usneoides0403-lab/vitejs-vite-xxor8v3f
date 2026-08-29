@@ -1,13 +1,12 @@
-# 買い物リスト / 店内レイアウト3D
+# 🏬 店内レイアウト3D
 
-React + Vite のアプリです。上部のタブで2つの画面を切り替えます。
+店内を自由にレイアウトできる 3D モデルツールです。棚・冷蔵ケース・レジなどの什器を
+ドラッグで並べ、俯瞰／間取り図／店内ウォークスルーの 3 つの視点で確認できます。
+React + Vite + three.js の単独アプリで、サーバは不要（データは端末に保存）です。
 
-- **🛒 買い物リスト** … 商品の追加・チェック・並び替え（従来からの機能）
-- **🏬 店内レイアウト** … 店内を自由にレイアウトできる3Dモデル（three.js）
+## できること
 
-## 店内レイアウト3D の使い方
-
-| できること | 操作 |
+| | 操作 |
 | --- | --- |
 | 什器を置く | 右（スマホは下）の「什器を追加」からタップ。棚・冷蔵ケース・レジ・イートイン席など13種類 |
 | 動かす | 3D画面で什器を**ドラッグ**。グリッド吸着（自由 / 10 / 25 / 50cm）で通路幅もそろう |
@@ -18,6 +17,7 @@ React + Vite のアプリです。上部のタブで2つの画面を切り替え
 | 保存 | 端末に自動保存。JSON / PNG での書き出しと、JSON の読み込みに対応 |
 
 ショートカット: `R` 回転 / 矢印キー 微調整 / `Delete` 削除 / `Ctrl+D` 複製 / `Ctrl+Z` 元に戻す / `Esc` 選択解除
+（アプリ右上の「使い方」からも確認できます）
 
 ## 開発
 
@@ -25,35 +25,36 @@ React + Vite のアプリです。上部のタブで2つの画面を切り替え
 npm install
 npm run dev     # 開発サーバ
 npm run build   # 本番ビルド
+npm run preview # ビルド結果の確認
 npm run lint    # ESLint
 ```
 
-3D画面は `React.lazy` で遅延読み込みしているため、買い物リストだけを使う場合は three.js を読み込みません。
+## ソース構成
 
-### ソース構成
-
-- `src/App.jsx` … 画面切り替え
-- `src/ShoppingList.jsx` … 買い物リスト
-- `src/store3d/StoreLayout3D.jsx` … 3Dレイアウト画面のUI・状態管理
+- `src/App.jsx` … アプリのシェル（ヘッダーと「使い方」シート）
+- `src/index.css` … 全体のスタイル
+- `src/store3d/StoreLayout3D.jsx` … レイアウト画面のUI・状態管理（履歴・自動保存・入出力）
 - `src/store3d/scene.js` … three.js のシーン（カメラ操作・選択・ドラッグ・一人称移動）
 - `src/store3d/fixtures.js` … 什器カタログとモデル生成
 - `src/store3d/presets.js` … テンプレートと配置ヘルパー
 
----
+### データ形式
 
-# React + Vite
+レイアウトは次の JSON で表され、`localStorage`（キー: `store-layout-3d-v1`）に自動保存されます。
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```jsonc
+{
+  "room": { "w": 12, "d": 9, "h": 3 },       // 幅・奥行・天井高（m）
+  "items": [
+    {
+      "id": "…",
+      "type": "shelf",                        // fixtures.js の CATALOG にある種類
+      "name": "お菓子",
+      "x": -3.6, "z": -1.6,                   // 店の中心が (0, 0)
+      "rotY": 0,                              // 向き（度）
+      "w": 1.2, "d": 0.6, "h": 1.8,           // サイズ（m）
+      "color": "#c9ced6"
+    }
+  ]
+}
+```

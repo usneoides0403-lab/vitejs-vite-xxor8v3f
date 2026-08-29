@@ -296,6 +296,7 @@ export default function StoreLayout3D() {
   // ===== キーボードショートカット =====
   useEffect(() => {
     function onKey(e) {
+      if (document.body.dataset.modal) return; // 使い方シートなどを開いている間
       const t = e.target;
       if (
         t instanceof HTMLElement &&

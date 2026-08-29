@@ -1,41 +1,99 @@
-import React, { Suspense, lazy, useState } from 'react';
-import ShoppingList from './ShoppingList.jsx';
+import React, { useEffect, useState } from 'react';
+import StoreLayout3D from './store3d/StoreLayout3D.jsx';
 
-// 3D（three.js）は重いので、レイアウト画面を開いたときだけ読み込む
-const StoreLayout3D = lazy(() => import('./store3d/StoreLayout3D.jsx'));
-
-const VIEWS = [
-  { id: 'list', label: '買い物リスト', emoji: '🛒' },
-  { id: 'layout', label: '店内レイアウト', emoji: '🏬' },
+const HELP = [
+  ['什器を置く', '右（スマホは下）の「什器を追加」から選ぶと、空いている場所に配置されます。'],
+  ['動かす', '3D画面で什器をドラッグ。グリッド吸着を使うと通路幅をそろえられます。'],
+  ['向き・大きさ・色', '什器を選び「選択中」タブでサイズ・角度・色・名前を変更します。'],
+  ['視点を変える', '俯瞰（回して眺める）／真上（間取り図として編集）／店内（一人称で歩く）。'],
+  ['店内を歩く', '「店内」でドラッグして見回し、WASD・矢印キー・画面のパッドで移動します。'],
+  ['店の広さ', '「店の広さ」タブで幅・奥行・天井高を変更。テンプレートの読み込みもできます。'],
+  ['保存', 'この端末に自動保存されます。JSON / PNG での書き出しと JSON の読み込みに対応。'],
 ];
 
+const KEYS = [
+  ['R', '15°回転（Shift+R で逆回転）'],
+  ['↑ ↓ ← →', '選択中の什器を微調整'],
+  ['Delete', '削除'],
+  ['Ctrl / ⌘ + D', '複製'],
+  ['Ctrl / ⌘ + Z', '元に戻す（Shift 併用でやり直す）'],
+  ['Esc', '選択を解除'],
+];
+
+function HelpSheet({ onClose }) {
+  // 開いている間は 3D 側のショートカット（R / Delete / WASD など）を止める
+  useEffect(() => {
+    document.body.dataset.modal = 'open';
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => {
+      delete document.body.dataset.modal;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="helpBackdrop" onClick={onClose}>
+      <div
+        className="helpSheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="使い方"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="helpHead">
+          <strong>使い方</strong>
+          <button type="button" className="helpClose" onClick={onClose} aria-label="閉じる">
+            ✕
+          </button>
+        </div>
+        <dl className="helpList">
+          {HELP.map(([term, desc]) => (
+            <div key={term}>
+              <dt>{term}</dt>
+              <dd>{desc}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="helpSub">キーボードショートカット</div>
+        <ul className="helpKeys">
+          {KEYS.map(([key, desc]) => (
+            <li key={key}>
+              <kbd>{key}</kbd>
+              <span>{desc}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [view, setView] = useState('list');
+  const [help, setHelp] = useState(false);
 
   return (
     <div className="appShell">
-      <nav className="viewSwitch">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            className={'viewTab' + (view === v.id ? ' on' : '')}
-            onClick={() => setView(v.id)}
-          >
-            <span aria-hidden="true">{v.emoji}</span> {v.label}
-          </button>
-        ))}
-      </nav>
+      <header className="appBar">
+        <span className="appMark" aria-hidden="true">
+          🏬
+        </span>
+        <div className="appTitles">
+          <h1 className="appTitle">店内レイアウト3D</h1>
+          <p className="appSub">棚もレジもドラッグで自由に配置できる店内3Dモデル</p>
+        </div>
+        <button type="button" className="appHelpBtn" onClick={() => setHelp(true)}>
+          使い方
+        </button>
+      </header>
 
-      <main className={'viewArea' + (view === 'list' ? ' scroll' : '')}>
-        {view === 'list' ? (
-          <ShoppingList />
-        ) : (
-          <Suspense fallback={<div className="viewLoading">3Dを読み込み中…</div>}>
-            <StoreLayout3D />
-          </Suspense>
-        )}
+      <main className="appMain">
+        <StoreLayout3D />
       </main>
+
+      {help ? <HelpSheet onClose={() => setHelp(false)} /> : null}
     </div>
   );
 }
