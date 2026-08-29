@@ -160,3 +160,52 @@ body{
   .unitMid{width:84px}
   .addBtn{width:86px}
 }
+/* ===== 画面切り替え（買い物リスト / 店内レイアウト） ===== */
+#root{height:100%}
+
+.appShell{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+}
+
+.viewSwitch{
+  display:flex;
+  gap:6px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  background:rgba(11,11,12,0.9);
+  backdrop-filter:blur(10px);
+}
+.viewTab{
+  flex:1 1 0;
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,0.04);
+  color:var(--muted);
+  font-weight:900;
+  font-size:13px;
+  white-space:nowrap;
+}
+.viewTab.on{
+  background:rgba(255,255,255,0.92);
+  color:#0b0b0c;
+  border-color:rgba(255,255,255,0.12);
+}
+.viewTab:active{transform:translateY(1px)}
+
+.viewArea{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+}
+.viewArea.scroll{overflow:auto}
+.viewLoading{
+  height:100%;
+  display:grid;
+  place-items:center;
+  color:var(--muted);
+  font-size:13px;
+}
