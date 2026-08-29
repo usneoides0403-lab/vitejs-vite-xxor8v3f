@@ -276,3 +276,16 @@
   }
   .s3dPad{right:10px;bottom:52px;width:116px;height:116px}
 }
+
+/* カタログの分類見出し */
+.s3dGroup{
+  margin:14px 0 6px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:0.08em;
+  color:#8e8e96;
+  border-top:1px solid var(--line,#2a2a2f);
+  padding-top:10px;
+}
+.s3dPanelBody > div:first-child .s3dGroup,
+.s3dGroup:first-child{border-top:0;padding-top:0;margin-top:6px}

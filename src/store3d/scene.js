@@ -382,9 +382,17 @@ export class StoreScene {
         tintFixture(g, item.color);
         g.userData.color = item.color;
       }
-      g.position.set(item.x, 0, item.z);
+      g.position.set(item.x, item.y || 0, item.z);
       g.rotation.y = deg(item.rotY || 0);
       g.scale.set(item.w, item.h, item.d);
+
+      // 畳・縁側の天端は実寸に合わせて張る
+      const deck = g.userData.deck;
+      if (deck) {
+        const rx = Math.max(0.25, item.w / deck.scale);
+        const rz = Math.max(0.25, item.d / deck.scale);
+        for (const t of deck.maps) t.repeat.set(rx, rz);
+      }
 
       // ラベル
       let sp = this.labels.get(item.id);
@@ -399,7 +407,7 @@ export class StoreScene {
         this.labelGroup.add(sp);
         this.labels.set(item.id, sp);
       }
-      sp.position.set(item.x, item.h + 0.32, item.z);
+      sp.position.set(item.x, (item.y || 0) + item.h + 0.32, item.z);
     }
 
     for (const [id, g] of this.items) {
@@ -433,7 +441,7 @@ export class StoreScene {
       return;
     }
     this.outline.visible = true;
-    this.outline.position.set(item.x, item.h / 2, item.z);
+    this.outline.position.set(item.x, (item.y || 0) + item.h / 2, item.z);
     this.outline.rotation.y = deg(item.rotY || 0);
     this.outline.scale.set(item.w * 1.02, item.h * 1.02, item.d * 1.02);
 
@@ -653,6 +661,7 @@ export class StoreScene {
   blocked(x, z, r) {
     for (const item of this.doc.items) {
       if (item.type === 'door' || item.h < 0.4) continue;
+      if ((item.y || 0) >= 1.0) continue; // 頭上の物はくぐれる
       const a = -deg(item.rotY || 0);
       const dx = x - item.x;
       const dz = z - item.z;

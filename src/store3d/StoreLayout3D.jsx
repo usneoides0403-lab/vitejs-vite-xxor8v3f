@@ -24,6 +24,15 @@ const HINTS = {
   walk: 'ドラッグで見回す / WASD・矢印キー・右下のパッドで歩く',
 };
 
+/** カタログを分類ごとにまとめる */
+const CATALOG_GROUPS = Object.entries(
+  CATALOG.reduce((acc, c) => {
+    const key = c.group || 'その他';
+    (acc[key] = acc[key] || []).push(c);
+    return acc;
+  }, {})
+);
+
 const FLOORS = [
   { v: 'wood', label: '板張り' },
   { v: 'tatami', label: '畳' },
@@ -526,24 +535,29 @@ export default function StoreLayout3D() {
           {tab === 'add' ? (
             <>
               <div className="s3dLabel">タップで店内に追加できます</div>
-              <div className="s3dCatalog">
-                {CATALOG.map((c) => (
-                  <button
-                    key={c.type}
-                    type="button"
-                    className="s3dCatBtn"
-                    onClick={() => addFixture(c.type)}
-                  >
-                    <span className="s3dCatEmoji" aria-hidden="true">
-                      {c.emoji}
-                    </span>
-                    <span className="s3dCatName">{c.label}</span>
-                    <span className="s3dCatSize">
-                      {c.w}×{c.d}m
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {CATALOG_GROUPS.map(([group, items]) => (
+                <div key={group}>
+                  <div className="s3dGroup">{group}</div>
+                  <div className="s3dCatalog">
+                    {items.map((c) => (
+                      <button
+                        key={c.type}
+                        type="button"
+                        className="s3dCatBtn"
+                        onClick={() => addFixture(c.type)}
+                      >
+                        <span className="s3dCatEmoji" aria-hidden="true">
+                          {c.emoji}
+                        </span>
+                        <span className="s3dCatName">{c.label}</span>
+                        <span className="s3dCatSize">
+                          {c.w}×{c.d}m
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
               <div className="s3dNote">
                 什器は {doc.items.length} 個 / 床面積 {area} ㎡
               </div>
@@ -653,15 +667,34 @@ export default function StoreLayout3D() {
                     />
                   </div>
                   <div>
-                    <span className="s3dMini">&nbsp;</span>
-                    <button
-                      type="button"
-                      className="s3dBtn wide"
-                      onClick={() => patchItem(selected.id, { x: 0, z: 0 })}
-                    >
-                      中央へ
-                    </button>
+                    <span className="s3dMini">床から</span>
+                    <NumField
+                      value={selected.y || 0}
+                      min={0}
+                      max={Math.max(0, doc.room.h - 0.1)}
+                      step={0.05}
+                      onCommit={(v) => patchItem(selected.id, { y: v })}
+                    />
                   </div>
+                </div>
+                <div className="s3dRow">
+                  <button
+                    type="button"
+                    className="s3dBtn"
+                    onClick={() => patchItem(selected.id, { x: 0, z: 0 })}
+                  >
+                    中央へ
+                  </button>
+                  <button
+                    type="button"
+                    className="s3dBtn"
+                    onClick={() => patchItem(selected.id, { y: 0 })}
+                  >
+                    床に下ろす
+                  </button>
+                </div>
+                <div className="s3dNote">
+                  「床から」はレンジフードや電子レンジのように、台の上や頭上へ置くときに使います。
                 </div>
 
                 <div className="s3dLabel">色</div>
