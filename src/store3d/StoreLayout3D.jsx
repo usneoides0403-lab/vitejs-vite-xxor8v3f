@@ -24,6 +24,13 @@ const HINTS = {
   walk: 'ドラッグで見回す / WASD・矢印キー・右下のパッドで歩く',
 };
 
+const FLOORS = [
+  { v: 'wood', label: '板張り' },
+  { v: 'tatami', label: '畳' },
+  { v: 'tile', label: 'タイル' },
+  { v: 'concrete', label: '土間' },
+];
+
 const SNAPS = [
   { v: 0, label: '自由' },
   { v: 0.1, label: '10cm' },
@@ -749,6 +756,24 @@ export default function StoreLayout3D() {
                     }
                   />
                 </div>
+              </div>
+
+              <div className="s3dLabel">床材</div>
+              <div className="s3dRow">
+                {FLOORS.map((f) => (
+                  <button
+                    key={f.v}
+                    type="button"
+                    className={
+                      's3dBtn' + ((doc.room.floor || 'wood') === f.v ? ' on' : '')
+                    }
+                    onClick={() =>
+                      edit((d) => ({ ...d, room: { ...d.room, floor: f.v } }))
+                    }
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
 
               <div className="s3dLabel">グリッド吸着</div>

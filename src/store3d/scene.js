@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildFixture, tintFixture, disposeFixture } from './fixtures.js';
+import { surface } from './textures.js';
 
 const EYE_HEIGHT = 1.6;
 const WALK_SPEED = 3.2; // m/s
@@ -61,6 +63,7 @@ export class StoreScene {
     this.items = new Map(); // id -> THREE.Group
     this.labels = new Map(); // id -> THREE.Sprite
     this.walls = [];
+    this.roomTextures = [];
     this.keys = new Set();
     this.padInput = { f: 0, s: 0 };
     this.clock = new THREE.Clock();
@@ -70,6 +73,8 @@ export class StoreScene {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -82,9 +87,16 @@ export class StoreScene {
     scene.background = new THREE.Color('#0e0f13');
     this.scene = scene;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a46, 0.85));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    // 室内の映り込み。金属やガラスの見え方がこれで決まる
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    this.envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = this.envRT.texture;
+    scene.environmentIntensity = 0.65;
+    pmrem.dispose();
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x4a4438, 0.5));
+    const sun = new THREE.DirectionalLight(0xfff4e2, 1.9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0012;
@@ -183,8 +195,17 @@ export class StoreScene {
   }
 
   // ===== 部屋 =====
+  /** 部屋用に複製したテクスチャを覚えておき、作り直すときに破棄する */
+  useTexture(tex) {
+    if (!tex) return null;
+    this.roomTextures.push(tex.map, tex.normalMap);
+    return tex;
+  }
+
   buildRoom(room) {
     const g = this.roomGroup;
+    for (const t of this.roomTextures) t.dispose();
+    this.roomTextures = [];
     while (g.children.length) {
       const c = g.children.pop();
       c.geometry?.dispose?.();
@@ -197,9 +218,18 @@ export class StoreScene {
 
     const { w, d, h } = room;
 
+    const floorKind = room.floor || 'wood';
+    const floorTex = this.useTexture(surface(floorKind, w, d));
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(w, d),
-      new THREE.MeshStandardMaterial({ color: '#e9e6e0', roughness: 0.95 })
+      new THREE.MeshStandardMaterial({
+        color: '#ffffff',
+        roughness: floorTex ? floorTex.roughness : 0.95,
+        metalness: 0,
+        map: floorTex?.map || null,
+        normalMap: floorTex?.normalMap || null,
+        envMapIntensity: floorKind === 'tile' ? 0.9 : 0.35,
+      })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -220,18 +250,29 @@ export class StoreScene {
     const grid = new THREE.LineSegments(
       gridGeo,
       new THREE.LineBasicMaterial({
-        color: 0x9aa2ad,
+        color: 0x6b7480,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.22,
       })
     );
     grid.position.y = 0.004;
+    grid.visible = this.mode !== 'walk'; // 店内を歩くときは補助線を消す
+    grid.material.opacity = this.mode === 'top' ? 0.4 : 0.18;
     g.add(grid);
+    this.grid = grid;
 
     // 天井（一人称のときだけ見せる）
+    const ceilTex = this.useTexture(surface('plaster', w, d));
     const ceiling = new THREE.Mesh(
       new THREE.PlaneGeometry(w, d),
-      new THREE.MeshStandardMaterial({ color: '#f7f6f3', roughness: 1 })
+      new THREE.MeshStandardMaterial({
+        color: '#efece6',
+        roughness: 1,
+        emissive: '#fffaf0',
+        emissiveIntensity: 0.14,
+        map: ceilTex?.map || null,
+        normalMap: ceilTex?.normalMap || null,
+      })
     );
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = h;
@@ -239,28 +280,54 @@ export class StoreScene {
     g.add(ceiling);
     this.ceiling = ceiling;
 
-    const wallMat = () =>
-      new THREE.MeshStandardMaterial({
-        color: '#f2f0eb',
-        roughness: 0.95,
+    const wallMat = (len) => {
+      const tex = this.useTexture(surface('plaster', len, h));
+      return new THREE.MeshStandardMaterial({
+        color: '#e8e3d9',
+        roughness: tex ? tex.roughness : 0.95,
+        map: tex?.map || null,
+        normalMap: tex?.normalMap || null,
+        envMapIntensity: 0.3,
         transparent: true,
         opacity: 1,
       });
+    };
     const t = 0.12;
     const defs = [
-      { pos: [0, h / 2, -d / 2 - t / 2], size: [w + t * 2, h, t], n: [0, 0, 1] },
-      { pos: [0, h / 2, d / 2 + t / 2], size: [w + t * 2, h, t], n: [0, 0, -1] },
-      { pos: [-w / 2 - t / 2, h / 2, 0], size: [t, h, d], n: [1, 0, 0] },
-      { pos: [w / 2 + t / 2, h / 2, 0], size: [t, h, d], n: [-1, 0, 0] },
+      { pos: [0, h / 2, -d / 2 - t / 2], size: [w + t * 2, h, t], n: [0, 0, 1], len: w },
+      { pos: [0, h / 2, d / 2 + t / 2], size: [w + t * 2, h, t], n: [0, 0, -1], len: w },
+      { pos: [-w / 2 - t / 2, h / 2, 0], size: [t, h, d], n: [1, 0, 0], len: d },
+      { pos: [w / 2 + t / 2, h / 2, 0], size: [t, h, d], n: [-1, 0, 0], len: d },
     ];
     for (const def of defs) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(...def.size), wallMat());
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...def.size), wallMat(def.len));
       m.position.set(...def.pos);
       m.receiveShadow = true;
       m.castShadow = false;
       m.userData.inward = new THREE.Vector3(...def.n);
       g.add(m);
       this.walls.push(m);
+    }
+
+    // 幅木（壁と床の取り合い）。あるだけで室内らしく見える
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: '#5c4a3a',
+      roughness: 0.55,
+      metalness: 0.02,
+    });
+    const bh = 0.08;
+    const bt = 0.03;
+    const bases = [
+      [[0, bh / 2, -d / 2 + bt / 2], [w, bh, bt]],
+      [[0, bh / 2, d / 2 - bt / 2], [w, bh, bt]],
+      [[-w / 2 + bt / 2, bh / 2, 0], [bt, bh, d]],
+      [[w / 2 - bt / 2, bh / 2, 0], [bt, bh, d]],
+    ];
+    for (const [pos, size] of bases) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...size), baseMat);
+      m.position.set(...pos);
+      m.receiveShadow = true;
+      g.add(m);
     }
 
     // 日照（影）の範囲を部屋に合わせる
@@ -290,7 +357,8 @@ export class StoreScene {
       !this.doc ||
       this.doc.room.w !== doc.room.w ||
       this.doc.room.d !== doc.room.d ||
-      this.doc.room.h !== doc.room.h;
+      this.doc.room.h !== doc.room.h ||
+      this.doc.room.floor !== doc.room.floor;
     this.doc = doc;
     if (roomChanged) this.buildRoom(doc.room);
 
@@ -389,6 +457,10 @@ export class StoreScene {
     const room = this.doc?.room || { w: 12, d: 9, h: 3 };
     if (this.sunHome && mode !== 'top') this.sun.position.copy(this.sunHome);
     if (this.ceiling) this.ceiling.visible = mode === 'walk';
+    if (this.grid) {
+      this.grid.visible = mode !== 'walk';
+      this.grid.material.opacity = mode === 'top' ? 0.4 : 0.18;
+    }
 
     if (mode === 'orbit') {
       this.camera = this.persp;
@@ -671,6 +743,8 @@ export class StoreScene {
     this.controls.dispose();
     this.topControls.dispose();
     for (const g of this.items.values()) disposeFixture(g);
+    for (const t of this.roomTextures) t.dispose();
+    this.envRT?.dispose();
     this.renderer.dispose();
     el.remove();
   }

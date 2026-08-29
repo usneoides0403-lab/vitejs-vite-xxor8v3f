@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { material } from './textures.js';
 
 /**
  * 什器（フィクスチャ）の定義とメッシュ生成。
@@ -37,6 +38,36 @@ const GOODS_COLORS = [
   '#4aa3c7', '#7d6bc4', '#d95f9a', '#e8e2d4',
 ];
 
+/**
+ * 什器の仕上げ（テクスチャの当て方）。
+ * 木部・ステンレス・粉体塗装で反射と細かい凹凸を変える。
+ */
+const FINISH = {
+  shelf: 'painted',
+  endcap: 'woodGrain',
+  fridge: 'metal',
+  freezer: 'metal',
+  register: 'painted',
+  counter: 'woodGrain',
+  table: 'woodGrain',
+  basket: 'painted',
+  plant: 'painted',
+  pillar: 'painted',
+  wall: 'plaster',
+  door: 'painted',
+  sign: 'painted',
+};
+
+const NORMAL_SCALE = new THREE.Vector2(0.6, 0.6);
+
+/** 仕上げごとのテクスチャの細かさ・反射の強さ */
+const FINISH_LOOK = {
+  woodGrain: { repeat: 2, metalness: 0.03, env: 0.45 },
+  metal: { repeat: 4, metalness: 0.78, env: 1.35 },
+  painted: { repeat: 3, metalness: 0.05, env: 0.6 },
+  plaster: { repeat: 2, metalness: 0, env: 0.3 },
+};
+
 function stdMat(color, extra) {
   return new THREE.MeshStandardMaterial({
     color: new THREE.Color(color),
@@ -46,13 +77,31 @@ function stdMat(color, extra) {
   });
 }
 
-function glassMat() {
+/** 仕上げのテクスチャを当てたマテリアル */
+function finishMat(color, finish, extra) {
+  const look = FINISH_LOOK[finish] || FINISH_LOOK.painted;
+  const tex = material(finish, look.repeat);
   return new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#cfeaf7'),
-    roughness: 0.08,
-    metalness: 0.0,
+    color: new THREE.Color(color),
+    roughness: tex ? tex.roughness : 0.85,
+    metalness: look.metalness,
+    envMapIntensity: look.env,
+    map: tex ? tex.map : null,
+    normalMap: tex ? tex.normalMap : null,
+    normalScale: NORMAL_SCALE.clone(),
+    ...extra,
+  });
+}
+
+function glassMat() {
+  return new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#dff1fa'),
+    roughness: 0.04,
+    metalness: 0,
+    transmission: 0,
     transparent: true,
-    opacity: 0.3,
+    opacity: 0.22,
+    envMapIntensity: 1.6,
   });
 }
 
@@ -91,7 +140,7 @@ function addGoods(group, y, depth, seed) {
     const c = GOODS_COLORS[(seed * 4 + i) % GOODS_COLORS.length];
     addBox(
       group,
-      stdMat(c, { roughness: 0.6 }),
+      finishMat(c, 'painted', { roughness: 0.72 }),
       0.16,
       0.13,
       depth,
@@ -108,9 +157,10 @@ function addGoods(group, y, depth, seed) {
  */
 export function buildFixture(type, color) {
   const g = new THREE.Group();
-  const body = stdMat(color);
-  const dark = stdMat(new THREE.Color(color).multiplyScalar(0.62));
-  const metal = stdMat('#9aa1a8', { roughness: 0.45, metalness: 0.35 });
+  const finish = FINISH[type] || 'painted';
+  const body = finishMat(color, finish);
+  const dark = finishMat(new THREE.Color(color).multiplyScalar(0.62), finish);
+  const metal = finishMat('#aeb5bb', 'metal', { roughness: 0.26 });
   g.userData.tint = [body, dark];
 
   switch (type) {
@@ -142,22 +192,22 @@ export function buildFixture(type, color) {
         addBox(g, metal, 0.86, 0.02, 0.8, 0, y, -0.02);
         addGoods(g, y, 0.3, i + 1);
       }
-      addBox(g, stdMat('#fff6d8', { emissive: '#fff2c9', emissiveIntensity: 0.6 }), 0.9, 0.03, 0.06, 0, 0.96, 0.44);
+      addBox(g, stdMat('#fff6d8', { emissive: '#fff2c9', emissiveIntensity: 0.8, roughness: 0.4 }), 0.9, 0.03, 0.06, 0, 0.96, 0.44);
       break;
     }
     case 'freezer': {
       addBox(g, body, 1, 0.9, 1, 0, 0.45, 0);
       addBox(g, dark, 0.92, 0.06, 0.92, 0, 0.78, 0);
-      addBox(g, stdMat('#dff1f7', { roughness: 0.3 }), 0.86, 0.02, 0.86, 0, 0.82, 0);
+      addBox(g, finishMat('#dff1f7', 'metal', { roughness: 0.18, metalness: 0.35 }), 0.86, 0.02, 0.86, 0, 0.82, 0);
       addBox(g, dark, 1.02, 0.08, 1.02, 0, 0.96, 0);
       break;
     }
     case 'register': {
       addBox(g, body, 1, 0.85, 1, 0, 0.425, 0);
       addBox(g, dark, 1.06, 0.06, 1.06, 0, 0.88, 0);
-      addBox(g, stdMat('#3a3f46'), 0.34, 0.26, 0.05, -0.2, 1.04, -0.05); // モニタ
+      addBox(g, stdMat('#22262b', { roughness: 0.25 }), 0.34, 0.26, 0.05, -0.2, 1.04, -0.05); // モニタ
       addBox(g, metal, 0.06, 0.12, 0.06, -0.2, 0.94, -0.05);
-      addBox(g, stdMat('#5a6068'), 0.26, 0.06, 0.2, 0.24, 0.94, 0); // ドロア
+      addBox(g, finishMat('#5a6068', 'painted'), 0.26, 0.06, 0.2, 0.24, 0.94, 0); // ドロア
       break;
     }
     case 'counter': {
@@ -184,8 +234,8 @@ export function buildFixture(type, color) {
       break;
     }
     case 'plant': {
-      addCyl(g, stdMat('#a8674a'), 0.28, 0.3, 0, 0.15, 0);
-      addCyl(g, stdMat('#4a3b2f'), 0.05, 0.35, 0, 0.42, 0);
+      addCyl(g, finishMat('#a8674a', 'painted', { roughness: 0.6 }), 0.28, 0.3, 0, 0.15, 0);
+      addCyl(g, finishMat('#4a3b2f', 'woodGrain'), 0.05, 0.35, 0, 0.42, 0);
       addSphere(g, body, 0.34, 0, 0.72, 0);
       addSphere(g, dark, 0.24, 0.18, 0.9, 0.1);
       addSphere(g, dark, 0.2, -0.2, 0.86, -0.08);
@@ -214,7 +264,7 @@ export function buildFixture(type, color) {
       addCyl(g, metal, 0.05, 0.62, 0, 0.31, 0);
       addBox(g, metal, 0.5, 0.04, 0.5, 0, 0.02, 0);
       addBox(g, body, 1, 0.42, 1, 0, 0.79, 0);
-      addBox(g, stdMat('#ffffff'), 0.84, 0.3, 0.2, 0, 0.79, 0.42);
+      addBox(g, stdMat('#f7f5ef', { roughness: 0.55 }), 0.84, 0.3, 0.2, 0, 0.79, 0.42);
       break;
     }
     default: {
