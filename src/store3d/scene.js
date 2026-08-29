@@ -228,7 +228,8 @@ export class StoreScene {
         metalness: 0,
         map: floorTex?.map || null,
         normalMap: floorTex?.normalMap || null,
-        envMapIntensity: floorKind === 'tile' ? 0.9 : 0.35,
+        envMapIntensity:
+          floorKind === 'tile' || floorKind === 'darkwood' ? 0.85 : 0.35,
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -262,14 +263,15 @@ export class StoreScene {
     this.grid = grid;
 
     // 天井（一人称のときだけ見せる）
-    const ceilTex = this.useTexture(surface('plaster', w, d));
+    const ceilKind = room.ceiling === 'wood' ? 'ceilingwood' : 'plaster';
+    const ceilTex = this.useTexture(surface(ceilKind, w, d));
     const ceiling = new THREE.Mesh(
       new THREE.PlaneGeometry(w, d),
       new THREE.MeshStandardMaterial({
-        color: '#efece6',
-        roughness: 1,
+        color: '#ffffff',
+        roughness: ceilTex ? ceilTex.roughness : 1,
         emissive: '#fffaf0',
-        emissiveIntensity: 0.14,
+        emissiveIntensity: ceilKind === 'ceilingwood' ? 0.08 : 0.14,
         map: ceilTex?.map || null,
         normalMap: ceilTex?.normalMap || null,
       })
@@ -280,14 +282,15 @@ export class StoreScene {
     g.add(ceiling);
     this.ceiling = ceiling;
 
+    const wallKind = room.wall || 'plaster';
     const wallMat = (len) => {
-      const tex = this.useTexture(surface('plaster', len, h));
+      const tex = this.useTexture(surface(wallKind, len, h));
       return new THREE.MeshStandardMaterial({
-        color: '#e8e3d9',
+        color: '#ffffff',
         roughness: tex ? tex.roughness : 0.95,
         map: tex?.map || null,
         normalMap: tex?.normalMap || null,
-        envMapIntensity: 0.3,
+        envMapIntensity: wallKind === 'panel' ? 0.6 : 0.3,
         transparent: true,
         opacity: 1,
       });
@@ -311,7 +314,7 @@ export class StoreScene {
 
     // 幅木（壁と床の取り合い）。あるだけで室内らしく見える
     const baseMat = new THREE.MeshStandardMaterial({
-      color: '#5c4a3a',
+      color: wallKind === 'panel' ? '#9aa0a5' : '#5c4a3a',
       roughness: 0.55,
       metalness: 0.02,
     });
@@ -358,7 +361,9 @@ export class StoreScene {
       this.doc.room.w !== doc.room.w ||
       this.doc.room.d !== doc.room.d ||
       this.doc.room.h !== doc.room.h ||
-      this.doc.room.floor !== doc.room.floor;
+      this.doc.room.floor !== doc.room.floor ||
+      this.doc.room.wall !== doc.room.wall ||
+      this.doc.room.ceiling !== doc.room.ceiling;
     this.doc = doc;
     if (roomChanged) this.buildRoom(doc.room);
 

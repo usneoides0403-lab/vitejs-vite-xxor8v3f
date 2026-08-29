@@ -189,11 +189,13 @@ function seamAt(v, pitch, width) {
   return d > 1 - width ? (d - (1 - width)) / width : 0;
 }
 
-/** 板張りの床。canvas 1枚 = 2m 角 */
-function woodPlanks() {
-  const rows = 5; // 板の枚数（板幅 40cm）
-  const light = rgb('#caa478');
-  const dark = rgb('#91704b');
+/**
+ * 板張りの床。canvas 1枚 = 2m 角。
+ * rows は板の枚数、tone は色味、gloss は艶（roughness）。
+ */
+function planks({ rows, light, dark, roughness, seamDepth = 0.06, seamContrast = 0.55 }) {
+  const lightC = rgb(light);
+  const darkC = rgb(dark);
   const grainField = field(1, 4, 4);
   const fineField = field(2, 3, 8);
   const base = [0, 0, 0];
@@ -201,27 +203,43 @@ function woodPlanks() {
   const color = paint((u, v, out) => {
     const r = Math.floor(v * rows);
     const off = (r % 2) * 0.5; // 木口を互い違いにずらす
-    const grain = grainField((u + off) * 1.0, v * 9.0);
-    const fine = fineField((u + off) * 3.0, v * 40.0);
+    const grain = grainField((u + off) * 1.0, v * (rows * 1.8));
+    const fine = fineField((u + off) * 3.0, v * (rows * 8));
     const t = clamp01((grain * 0.7 + fine * 0.3) * 1.25 - 0.1);
-    base[0] = mix(dark[0], light[0], t);
-    base[1] = mix(dark[1], light[1], t);
-    base[2] = mix(dark[2], light[2], t);
-    const tone = 0.82 + ((r * 37) % 11) / 40; // 板ごとの色ムラ
-    // 板の継ぎ目（長辺）と木口（短辺）を暗く
-    const j = Math.max(seamAt(v, rows, 0.06), seamAt(u + off, 2, 0.035) * 0.8);
-    shade(out, base, tone * (1 - j * 0.55));
+    base[0] = mix(darkC[0], lightC[0], t);
+    base[1] = mix(darkC[1], lightC[1], t);
+    base[2] = mix(darkC[2], lightC[2], t);
+    const tone = 0.84 + ((r * 37) % 11) / 45; // 板ごとの色ムラ
+    const j = Math.max(seamAt(v, rows, seamDepth), seamAt(u + off, 2, 0.035) * 0.8);
+    shade(out, base, tone * (1 - j * seamContrast));
   });
 
   const height = paintGray((u, v) => {
     const r = Math.floor(v * rows);
     const off = (r % 2) * 0.5;
-    const grain = fineField((u + off) * 3.0, v * 40.0);
-    const j = Math.max(seamAt(v, rows, 0.05), seamAt(u + off, 2, 0.03));
+    const grain = fineField((u + off) * 3.0, v * (rows * 8));
+    const j = Math.max(seamAt(v, rows, seamDepth - 0.01), seamAt(u + off, 2, 0.03));
     return (0.7 + grain * 0.3) * (1 - j);
   });
 
-  return { color, height, normalStrength: 2.2, roughness: 0.62 };
+  return { color, height, normalStrength: 2.2, roughness };
+}
+
+/** 明るい板張り（縁側・洋室） */
+function woodPlanks() {
+  return planks({ rows: 5, light: '#caa478', dark: '#91704b', roughness: 0.62 });
+}
+
+/** 濃色の板張り。幅の狭い板を拭き漆のように仕上げた和室の床 */
+function darkWoodPlanks() {
+  return planks({
+    rows: 14,
+    light: '#8a5230',
+    dark: '#4a2a18',
+    roughness: 0.3,
+    seamDepth: 0.035,
+    seamContrast: 0.32,
+  });
 }
 
 /**
@@ -232,7 +250,7 @@ function tatami() {
   const SZ = 768;
   const face = rgb('#c4b78d');
   const deep = rgb('#a2996e');
-  const edge = rgb('#33384a'); // 縁（へり）
+  const edge = rgb('#3b5a4c'); // 縁（へり）
   const edgeField = field(6, 2, 8);
   const strandField = field(7, 2, 8);
   const blotchField = field(5, 3, 4);
@@ -320,11 +338,13 @@ function concrete() {
   const mottleField = field(11, 5, 4);
   const speckField = field(12, 2, 16);
   const bumpField = field(12, 3, 16);
+  const stainField = field(13, 3, 2); // 大きな染み
 
   const color = paint((u, v, out) => {
     const n = mottleField(u, v);
     const speck = speckField(u * 8, v * 8);
-    shade(out, base, 0.86 + n * 0.2 + (speck > 0.72 ? 0.06 : 0));
+    const stain = clamp01((stainField(u, v) - 0.55) * 2.2); // うっすら濃い部分
+    shade(out, base, (0.86 + n * 0.2 + (speck > 0.72 ? 0.06 : 0)) * (1 - stain * 0.22));
   });
   const height = paintGray((u, v) => bumpField(u * 8, v * 8));
   return { color, height, normalStrength: 1.2, roughness: 0.92 };
@@ -332,7 +352,7 @@ function concrete() {
 
 /** 塗り壁（漆喰）。canvas 1枚 = 2.5m 角 */
 function plaster() {
-  const base = rgb('#efece5');
+  const base = rgb('#e7e2d8');
   const cloudField = field(21, 5, 4);
   const trowelField = field(22, 3, 8); // 倍率は整数のみ（周期を保つため）
   const bumpField = field(22, 4, 8);
@@ -346,6 +366,91 @@ function plaster() {
   });
   const height = paintGray((u, v) => bumpField(u * 3, v * 3));
   return { color, height, normalStrength: 1.6, roughness: 0.95 };
+}
+
+/** 聚楽壁（じゅらくかべ）。黄土色の砂壁 */
+function juraku() {
+  const base = rgb('#dcd2b2');
+  const cloudField = field(23, 5, 4);
+  const sandField = field(24, 2, 16);
+  const grainField = field(25, 2, 32);
+
+  const color = paint((u, v, out) => {
+    const sand = sandField(u * 6, v * 6);
+    const grain = grainField(u * 12, v * 12);
+    shade(out, base, 0.91 + cloudField(u, v) * 0.07 + sand * 0.05 + grain * 0.05);
+  });
+  const height = paintGray((u, v) => grainField(u * 12, v * 12) * 0.7 + sandField(u * 6, v * 6) * 0.3);
+  return { color, height, normalStrength: 1.3, roughness: 0.97 };
+}
+
+/** 板壁（縦張り）。canvas 1枚 = 2m 角 */
+function woodWall() {
+  const cols = 10; // 板幅 20cm
+  const light = rgb('#8f6f4e');
+  const dark = rgb('#5a4028');
+  const grainField = field(26, 4, 4);
+  const base = [0, 0, 0];
+
+  const color = paint((u, v, out) => {
+    const c = Math.floor(u * cols);
+    const grain = grainField(v * 1.0, u * 24);
+    const t = clamp01(grain * 1.2 - 0.05);
+    base[0] = mix(dark[0], light[0], t);
+    base[1] = mix(dark[1], light[1], t);
+    base[2] = mix(dark[2], light[2], t);
+    const tone = 0.86 + ((c * 41) % 9) / 45;
+    const j = seamAt(u, cols, 0.05);
+    shade(out, base, tone * (1 - j * 0.6));
+  });
+  const height = paintGray((u, v) => {
+    const grain = grainField(v * 1.0, u * 24);
+    return (0.7 + grain * 0.3) * (1 - seamAt(u, cols, 0.04));
+  });
+  return { color, height, normalStrength: 2.0, roughness: 0.6 };
+}
+
+/** キッチンパネル。継ぎ目の目立たない白い拭ける壁 */
+function panelWall() {
+  const base = rgb('#eef0ee');
+  const cloudField = field(27, 3, 4);
+  const color = paint((u, v, out) => {
+    const seam = Math.max(seamAt(u, 2, 0.012), seamAt(v, 2, 0.012));
+    shade(out, base, (0.97 + cloudField(u, v) * 0.05) * (1 - seam * 0.12));
+  });
+  const height = paintGray((u, v) => 1 - Math.max(seamAt(u, 2, 0.01), seamAt(v, 2, 0.01)) * 0.8);
+  return { color, height, normalStrength: 1.0, roughness: 0.35 };
+}
+
+/** 竿縁天井。板の上に細い竿縁が渡る。canvas 1枚 = 1.8m 角 */
+function ceilingWood() {
+  const boards = 4; // 板幅 45cm
+  const light = rgb('#c3a271');
+  const dark = rgb('#9d7c4f');
+  const sao = rgb('#4b3524'); // 竿縁
+  const grainField = field(28, 4, 4);
+  const base = [0, 0, 0];
+
+  const color = paint((u, v, out) => {
+    const saoBand = seamAt(u, 3, 0.09); // 竿縁（直交方向に3本）
+    if (saoBand > 0.55) {
+      shade(out, sao, 0.9 + grainField(u * 8, v * 2) * 0.2);
+      return;
+    }
+    const grain = grainField(u * 1.0, v * 10);
+    const t = clamp01(grain * 1.15);
+    base[0] = mix(dark[0], light[0], t);
+    base[1] = mix(dark[1], light[1], t);
+    base[2] = mix(dark[2], light[2], t);
+    const j = seamAt(v, boards, 0.04);
+    shade(out, base, (0.9 + ((Math.floor(v * boards) * 31) % 7) / 60) * (1 - j * 0.5));
+  });
+  const height = paintGray((u, v) => {
+    const saoBand = seamAt(u, 3, 0.09);
+    if (saoBand > 0.55) return 1;
+    return 0.72 - seamAt(v, boards, 0.035) * 0.3;
+  });
+  return { color, height, normalStrength: 1.6, roughness: 0.75 };
 }
 
 /** 什器の木部。色を乗せるので白基調 */
@@ -366,12 +471,24 @@ function brushedMetal() {
   const SZ = 256;
   const lineField = field(41, 2, 16);
   const wideField = field(42, 3, 4);
+  const scratchField = field(43, 2, 8); // 使い込んだ擦り傷
+  const scratch = (u, v) => {
+    const n = scratchField(u * 3 + v * 6, v * 2);
+    return n > 0.78 ? (n - 0.78) / 0.22 : 0;
+  };
   const color = paint((u, v, out) => {
-    const t = 0.95 + lineField(u * 1.0, v * 384) * 0.06 + wideField(u * 2, v * 8) * 0.02;
+    const t =
+      0.95 +
+      lineField(u * 1.0, v * 384) * 0.06 +
+      wideField(u * 2, v * 8) * 0.02 -
+      scratch(u, v) * 0.05;
     out[0] = out[1] = out[2] = t * 255;
   }, SZ);
-  const height = paintGray((u, v) => lineField(u * 1.0, v * 384), SZ);
-  return { color, height, normalStrength: 0.35, roughness: 0.3 };
+  const height = paintGray(
+    (u, v) => lineField(u * 1.0, v * 384) * 0.7 + scratch(u, v) * 0.3,
+    SZ
+  );
+  return { color, height, normalStrength: 0.45, roughness: 0.28 };
 }
 
 /** 粉体塗装の金属（棚など）。ごく細かい梨地 */
@@ -390,6 +507,11 @@ function paintedSteel() {
 
 const BUILDERS = {
   wood: woodPlanks,
+  darkwood: darkWoodPlanks,
+  juraku,
+  woodwall: woodWall,
+  panel: panelWall,
+  ceilingwood: ceilingWood,
   tatami,
   tile: tiles,
   concrete,
@@ -402,6 +524,11 @@ const BUILDERS = {
 /** 素材1枚分の実寸（m）。床材の繰り返し計算に使う */
 export const MATERIAL_SCALE = {
   wood: 2.0,
+  darkwood: 2.0,
+  juraku: 2.5,
+  woodwall: 2.0,
+  panel: 2.4,
+  ceilingwood: 1.8,
   tatami: 3.64,
   tile: 1.2,
   concrete: 2.0,

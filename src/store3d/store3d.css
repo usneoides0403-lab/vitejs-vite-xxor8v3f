@@ -289,3 +289,29 @@
 }
 .s3dPanelBody > div:first-child .s3dGroup,
 .s3dGroup:first-child{border-top:0;padding-top:0;margin-top:6px}
+
+/* アプリ内の確認ダイアログ */
+.s3dAsk{
+  position:absolute;
+  inset:0;
+  z-index:5;
+  display:grid;
+  place-items:center;
+  padding:16px;
+  background:rgba(8,8,10,0.55);
+  backdrop-filter:blur(3px);
+}
+.s3dAskBox{
+  width:min(340px,100%);
+  padding:16px;
+  border-radius:16px;
+  border:1px solid var(--line,#2a2a2f);
+  background:linear-gradient(180deg,#17171a 0%,#121214 100%);
+  box-shadow:0 16px 40px rgba(0,0,0,0.5);
+}
+.s3dAskText{
+  font-size:13px;
+  line-height:1.7;
+  color:#f4f4f5;
+  margin-bottom:14px;
+}

@@ -31,7 +31,7 @@ export const PRESETS = {
   empty: {
     label: 'から（空の店）',
     build: () => ({
-      room: { w: 10, d: 8, h: 3, floor: 'wood' },
+      room: { w: 10, d: 8, h: 3, floor: 'wood', wall: 'plaster', ceiling: 'plaster' },
       items: [
         makeItem('door', { x: 0, z: 3.9, name: '入口' }),
       ],
@@ -41,7 +41,7 @@ export const PRESETS = {
   konbini: {
     label: 'コンビニ風',
     build: () => ({
-      room: { w: 12, d: 9, h: 3, floor: 'tile' },
+      room: { w: 12, d: 9, h: 3, floor: 'tile', wall: 'panel', ceiling: 'plaster' },
       items: [
         makeItem('door', { x: -3.5, z: 4.38, name: '入口' }),
         makeItem('sign', { x: -1.5, z: 4.0, name: 'のぼり' }),
@@ -69,7 +69,7 @@ export const PRESETS = {
   washoku: {
     label: '和食店風',
     build: () => ({
-      room: { w: 13, d: 11, h: 3, floor: 'wood' },
+      room: { w: 13, d: 11, h: 3, floor: 'darkwood', wall: 'juraku', ceiling: 'wood' },
       items: [
         // --- 縁側と座敷 ---
         makeItem('engawa', { x: -1.2, z: -5.0, w: 8.0, d: 0.9, name: '縁側' }),
@@ -130,7 +130,7 @@ export const PRESETS = {
   super: {
     label: 'スーパー風',
     build: () => ({
-      room: { w: 18, d: 13, h: 3.4, floor: 'tile' },
+      room: { w: 18, d: 13, h: 3.4, floor: 'tile', wall: 'panel', ceiling: 'plaster' },
       items: [
         makeItem('door', { x: -6.5, z: 6.38, name: '入口' }),
         makeItem('door', { x: 6.5, z: 6.38, name: '出口' }),

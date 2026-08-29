@@ -378,7 +378,7 @@ export function buildFixture(type, color) {
       }
       // 座布団
       for (const z of [-0.78, 0.78]) {
-        addBox(g, stdMat('#7d3b3b', { roughness: 0.95 }), 0.42, 0.16, 0.4, 0, 0.08, z);
+        addBox(g, stdMat('#7c7f42', { roughness: 0.98 }), 0.42, 0.16, 0.4, 0, 0.08, z);
       }
       break;
     }

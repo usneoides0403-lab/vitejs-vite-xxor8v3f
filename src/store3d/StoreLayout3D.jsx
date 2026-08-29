@@ -35,9 +35,22 @@ const CATALOG_GROUPS = Object.entries(
 
 const FLOORS = [
   { v: 'wood', label: '板張り' },
+  { v: 'darkwood', label: '濃い板張り' },
   { v: 'tatami', label: '畳' },
   { v: 'tile', label: 'タイル' },
   { v: 'concrete', label: '土間' },
+];
+
+const WALLS = [
+  { v: 'plaster', label: '白い塗り壁' },
+  { v: 'juraku', label: '聚楽壁' },
+  { v: 'woodwall', label: '板壁' },
+  { v: 'panel', label: 'キッチンパネル' },
+];
+
+const CEILINGS = [
+  { v: 'plaster', label: '白' },
+  { v: 'wood', label: '竿縁天井' },
 ];
 
 const SNAPS = [
@@ -141,6 +154,8 @@ export default function StoreLayout3D() {
   const [tab, setTab] = useState('add');
   const [jsonDraft, setJsonDraft] = useState('');
   const [toast, setToast] = useState('');
+  // 確認ダイアログ。window.confirm は埋め込み表示（iframe）で無効化されるため自前で出す
+  const [ask, setAsk] = useState(null);
 
   const selected = useMemo(
     () => doc.items.find((x) => x.id === selectedId) || null,
@@ -418,12 +433,20 @@ export default function StoreLayout3D() {
   function loadPreset(key) {
     const p = PRESETS[key];
     if (!p) return;
-    if (doc.items.length && !window.confirm(`「${p.label}」を読み込みます。今のレイアウトは置き換わります（元に戻すで復元できます）。`)) {
+    const run = () => {
+      edit(() => p.build());
+      setSelectedId(null);
+      showToast(`${p.label} を読み込みました`);
+    };
+    if (!doc.items.length) {
+      run();
       return;
     }
-    edit(() => p.build());
-    setSelectedId(null);
-    showToast(`${p.label} を読み込みました`);
+    setAsk({
+      text: `「${p.label}」を読み込みます。今のレイアウトは置き換わります。`,
+      ok: '読み込む',
+      run,
+    });
   }
 
   const area = (doc.room.w * doc.room.d).toFixed(1);
@@ -510,6 +533,35 @@ export default function StoreLayout3D() {
         ) : null}
 
         {toast ? <div className="s3dToast">{toast}</div> : null}
+
+        {ask ? (
+          <div className="s3dAsk" onClick={() => setAsk(null)}>
+            <div
+              className="s3dAskBox"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="s3dAskText">{ask.text}</div>
+              <div className="s3dRow">
+                <button type="button" className="s3dBtn" onClick={() => setAsk(null)}>
+                  やめる
+                </button>
+                <button
+                  type="button"
+                  className="s3dBtn on"
+                  onClick={() => {
+                    ask.run();
+                    setAsk(null);
+                  }}
+                >
+                  {ask.ok}
+                </button>
+              </div>
+              <div className="s3dNote">元に戻す（Ctrl+Z）でやり直せます。</div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="s3dPanel">
@@ -809,6 +861,43 @@ export default function StoreLayout3D() {
                 ))}
               </div>
 
+              <div className="s3dLabel">壁材</div>
+              <div className="s3dRow">
+                {WALLS.map((f) => (
+                  <button
+                    key={f.v}
+                    type="button"
+                    className={
+                      's3dBtn' + ((doc.room.wall || 'plaster') === f.v ? ' on' : '')
+                    }
+                    onClick={() =>
+                      edit((d) => ({ ...d, room: { ...d.room, wall: f.v } }))
+                    }
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="s3dLabel">天井</div>
+              <div className="s3dRow">
+                {CEILINGS.map((f) => (
+                  <button
+                    key={f.v}
+                    type="button"
+                    className={
+                      's3dBtn' + ((doc.room.ceiling || 'plaster') === f.v ? ' on' : '')
+                    }
+                    onClick={() =>
+                      edit((d) => ({ ...d, room: { ...d.room, ceiling: f.v } }))
+                    }
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <div className="s3dNote">天井は「店内」で歩くときに見えます。</div>
+
               <div className="s3dLabel">グリッド吸着</div>
               <div className="s3dRow">
                 {SNAPS.map((s) => (
@@ -841,11 +930,16 @@ export default function StoreLayout3D() {
                 <button
                   type="button"
                   className="s3dBtn danger"
-                  onClick={() => {
-                    if (!window.confirm('什器をすべて削除します。よろしいですか？')) return;
-                    edit((d) => ({ ...d, items: [] }));
-                    setSelectedId(null);
-                  }}
+                  onClick={() =>
+                    setAsk({
+                      text: '什器をすべて削除します。よろしいですか？',
+                      ok: '全部消す',
+                      run: () => {
+                        edit((d) => ({ ...d, items: [] }));
+                        setSelectedId(null);
+                      },
+                    })
+                  }
                 >
                   什器を全消去
                 </button>
