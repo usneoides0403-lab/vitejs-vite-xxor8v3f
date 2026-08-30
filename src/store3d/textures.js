@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PHOTOS } from './photos.js';
 
 /**
  * テクスチャの生成。
@@ -557,6 +558,30 @@ export const MATERIAL_SCALE = {
 };
 
 const cache = new Map();
+const loader = new THREE.TextureLoader();
+
+/** 写真テクスチャを読み込む（読み込み完了後に自動で反映される） */
+function photoTex(url, { srgb = false, rx = 1, ry = 1 } = {}) {
+  const t = loader.load(url);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAnisotropy;
+  return t;
+}
+
+/** 写真から起こした素材（あれば手続き生成より優先する） */
+function photoMaterial(kind, rx, ry) {
+  const p = PHOTOS[kind];
+  if (!p) return null;
+  return {
+    map: p.bumpOnly ? null : photoTex(p.color, { srgb: true, rx, ry }),
+    normalMap: photoTex(p.normal, { rx, ry }),
+    roughnessMap: null,
+    roughness: p.roughness,
+  };
+}
 
 /**
  * 素材の {map, normalMap, roughness} を返す。
@@ -567,6 +592,12 @@ export function material(kind, repeat = 1) {
   const key = kind + '@' + repeat;
   let m = cache.get(key);
   if (m) return m;
+
+  if (PHOTOS[kind]) {
+    m = photoMaterial(kind, repeat, repeat);
+    cache.set(key, m);
+    return m;
+  }
 
   const build = BUILDERS[kind];
   if (!build) return null;
@@ -585,6 +616,15 @@ export function material(kind, repeat = 1) {
 
 /** 床・壁のように部屋の大きさで繰り返し数が変わるもの用 */
 export function surface(kind, widthM, heightM) {
+  const photo = PHOTOS[kind];
+  if (photo) {
+    const s = photo.scale;
+    return {
+      ...photoMaterial(kind, widthM / s, heightM / s),
+      roughness: photo.roughness,
+    };
+  }
+
   const src = material(kind);
   if (!src) return null;
   const scale = MATERIAL_SCALE[kind] || 2;

@@ -444,7 +444,7 @@ export class StoreScene {
       bulb.material.emissiveIntensity = night ? 1.6 : 0.2;
     }
     if (this.ceiling) {
-      this.ceiling.material.emissiveIntensity = night ? 0.04 : 0.18;
+      this.ceiling.material.emissiveIntensity = night ? 0.04 : 0.09;
     }
   }
 

@@ -109,7 +109,7 @@ const NORMAL_SCALE = new THREE.Vector2(0.6, 0.6);
 const FINISH_LOOK = {
   // clearcoat: 塗膜 / anisotropy: ヘアラインに沿った反射の伸び
   woodGrain: { repeat: 2, metalness: 0.03, env: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.25 },
-  metal: { repeat: 4, metalness: 0.8, env: 1.4, anisotropy: 0.55 },
+  metal: { repeat: 3, metalness: 0.82, env: 1.7, anisotropy: 0.55 },
   painted: { repeat: 3, metalness: 0.05, env: 0.6, clearcoat: 0.15, clearcoatRoughness: 0.4 },
   plaster: { repeat: 2, metalness: 0, env: 0.3 },
 };
