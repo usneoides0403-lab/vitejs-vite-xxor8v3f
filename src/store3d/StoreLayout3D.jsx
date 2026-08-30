@@ -6,6 +6,7 @@ import { saveFile, dataUrlToBlob } from './saveFile.js';
 import './store3d.css';
 
 const STORAGE_KEY = 'store-layout-3d-v1';
+const QUALITY_KEY = 'store-layout-3d-quality';
 
 const COLORS = [
   '#c9ced6', '#a9b6bf', '#d9c49a', '#c9ab7d', '#e0cf9b',
@@ -51,6 +52,16 @@ const WALLS = [
 const CEILINGS = [
   { v: 'plaster', label: '白' },
   { v: 'wood', label: '竿縁天井' },
+];
+
+const LIGHTS = [
+  { v: 'day', label: '昼（自然光）' },
+  { v: 'night', label: '夜（店内照明）' },
+];
+
+const QUALITIES = [
+  { v: 'standard', label: '標準' },
+  { v: 'high', label: '高（陰影あり）' },
 ];
 
 const SNAPS = [
@@ -150,6 +161,18 @@ export default function StoreLayout3D() {
   const [selectedId, setSelectedId] = useState(null);
   const [mode, setMode] = useState('orbit');
   const [snap, setSnap] = useState(0.25);
+  const [quality, setQuality] = useState(() => {
+    try {
+      const saved = localStorage.getItem(QUALITY_KEY);
+      if (saved) return saved;
+    } catch {
+      /* 参照できない環境では既定値を使う */
+    }
+    // 広い画面なら陰影ありで始める
+    return typeof window !== 'undefined' && window.innerWidth >= 900
+      ? 'high'
+      : 'standard';
+  });
   const [labels, setLabels] = useState(true);
   const [tab, setTab] = useState('add');
   const [jsonDraft, setJsonDraft] = useState('');
@@ -312,6 +335,15 @@ export default function StoreLayout3D() {
   useEffect(() => {
     sceneRef.current?.setSnap(snap);
   }, [snap]);
+
+  useEffect(() => {
+    sceneRef.current?.setQuality(quality);
+    try {
+      localStorage.setItem(QUALITY_KEY, quality);
+    } catch {
+      /* 保存できなくても動作に影響はない */
+    }
+  }, [quality]);
 
   // 自動保存
   useEffect(() => {
@@ -897,6 +929,42 @@ export default function StoreLayout3D() {
                 ))}
               </div>
               <div className="s3dNote">天井は「店内」で歩くときに見えます。</div>
+
+              <div className="s3dLabel">照明</div>
+              <div className="s3dRow">
+                {LIGHTS.map((f) => (
+                  <button
+                    key={f.v}
+                    type="button"
+                    className={
+                      's3dBtn' + ((doc.room.light || 'day') === f.v ? ' on' : '')
+                    }
+                    onClick={() =>
+                      edit((d) => ({ ...d, room: { ...d.room, light: f.v } }))
+                    }
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="s3dLabel">画質</div>
+              <div className="s3dRow">
+                {QUALITIES.map((q) => (
+                  <button
+                    key={q.v}
+                    type="button"
+                    className={'s3dBtn' + (quality === q.v ? ' on' : '')}
+                    onClick={() => setQuality(q.v)}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+              <div className="s3dNote">
+                「高」は隅や什器の足元に陰影（アンビエントオクルージョン）を付けます。
+                動きが重いときは「標準」にしてください。
+              </div>
 
               <div className="s3dLabel">グリッド吸着</div>
               <div className="s3dRow">

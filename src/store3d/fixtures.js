@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { material, surface } from './textures.js';
 
 /**
@@ -9,8 +10,8 @@ import { material, surface } from './textures.js';
  * 実サイズは呼び出し側で group.scale.set(w, h, d) して合わせる。
  */
 
-const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
-const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
+const UNIT_BOX = new RoundedBoxGeometry(1, 1, 1, 1, 0.02); // わずかに面取りする
+const UNIT_CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
 const UNIT_SPHERE = new THREE.IcosahedronGeometry(0.5, 1);
 
 export const CATALOG = [
@@ -106,9 +107,10 @@ const NORMAL_SCALE = new THREE.Vector2(0.6, 0.6);
 
 /** 仕上げごとのテクスチャの細かさ・反射の強さ */
 const FINISH_LOOK = {
-  woodGrain: { repeat: 2, metalness: 0.03, env: 0.45 },
-  metal: { repeat: 4, metalness: 0.78, env: 1.35 },
-  painted: { repeat: 3, metalness: 0.05, env: 0.6 },
+  // clearcoat: 塗膜 / anisotropy: ヘアラインに沿った反射の伸び
+  woodGrain: { repeat: 2, metalness: 0.03, env: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.25 },
+  metal: { repeat: 4, metalness: 0.8, env: 1.4, anisotropy: 0.55 },
+  painted: { repeat: 3, metalness: 0.05, env: 0.6, clearcoat: 0.15, clearcoatRoughness: 0.4 },
   plaster: { repeat: 2, metalness: 0, env: 0.3 },
 };
 
@@ -125,13 +127,17 @@ function stdMat(color, extra) {
 function finishMat(color, finish, extra) {
   const look = FINISH_LOOK[finish] || FINISH_LOOK.painted;
   const tex = material(finish, look.repeat);
-  return new THREE.MeshStandardMaterial({
+  return new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(color),
     roughness: tex ? tex.roughness : 0.85,
     metalness: look.metalness,
     envMapIntensity: look.env,
+    clearcoat: look.clearcoat || 0,
+    clearcoatRoughness: look.clearcoatRoughness || 0,
+    anisotropy: look.anisotropy || 0,
     map: tex ? tex.map : null,
     normalMap: tex ? tex.normalMap : null,
+    roughnessMap: tex ? tex.roughnessMap : null,
     normalScale: NORMAL_SCALE.clone(),
     ...extra,
   });
@@ -149,6 +155,7 @@ function deckMat(g, kind, scale) {
     metalness: 0,
     map: tex?.map || null,
     normalMap: tex?.normalMap || null,
+    roughnessMap: tex?.roughnessMap || null,
     envMapIntensity: 0.3,
   });
   if (tex) {

@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildFixture, tintFixture, disposeFixture } from './fixtures.js';
-import { surface } from './textures.js';
+import { surface, setMaxAnisotropy } from './textures.js';
 
 const EYE_HEIGHT = 1.6;
 const WALK_SPEED = 3.2; // m/s
@@ -64,6 +68,9 @@ export class StoreScene {
     this.labels = new Map(); // id -> THREE.Sprite
     this.walls = [];
     this.roomTextures = [];
+    this.lamps = [];
+    this.quality = 'standard';
+    this.composer = null;
     this.keys = new Set();
     this.padInput = { f: 0, s: 0 };
     this.clock = new THREE.Clock();
@@ -81,6 +88,7 @@ export class StoreScene {
     renderer.domElement.style.touchAction = 'none';
     container.appendChild(renderer.domElement);
     this.renderer = renderer;
+    setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 
     // --- scene ---
     const scene = new THREE.Scene();
@@ -94,22 +102,30 @@ export class StoreScene {
     scene.environmentIntensity = 0.65;
     pmrem.dispose();
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-    scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x4a4438, 0.5));
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.25);
+    scene.add(this.ambient);
+    this.hemi = new THREE.HemisphereLight(0xf2f6ff, 0x4a4438, 0.5);
+    scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff4e2, 1.9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.0012;
+    sun.shadow.bias = -0.0009;
+    sun.shadow.normalBias = 0.02;
+    sun.shadow.radius = 3;
     scene.add(sun);
     scene.add(sun.target);
     this.sun = sun;
 
     this.roomGroup = new THREE.Group();
     scene.add(this.roomGroup);
+    this.lampGroup = new THREE.Group();
+    scene.add(this.lampGroup);
     this.itemGroup = new THREE.Group();
     scene.add(this.itemGroup);
+    // ラベルは陰影（AO）の影響を受けないよう、別シーンで最後に重ねて描く
     this.labelGroup = new THREE.Group();
-    scene.add(this.labelGroup);
+    this.labelScene = new THREE.Scene();
+    this.labelScene.add(this.labelGroup);
 
     // --- 選択ハイライト ---
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
@@ -228,6 +244,7 @@ export class StoreScene {
         metalness: 0,
         map: floorTex?.map || null,
         normalMap: floorTex?.normalMap || null,
+        roughnessMap: floorTex?.roughnessMap || null,
         envMapIntensity:
           floorKind === 'tile' || floorKind === 'darkwood' ? 0.85 : 0.35,
       })
@@ -290,6 +307,7 @@ export class StoreScene {
         roughness: tex ? tex.roughness : 0.95,
         map: tex?.map || null,
         normalMap: tex?.normalMap || null,
+        roughnessMap: tex?.roughnessMap || null,
         envMapIntensity: wallKind === 'panel' ? 0.6 : 0.3,
         transparent: true,
         opacity: 1,
@@ -349,9 +367,85 @@ export class StoreScene {
     cam.far = r * 6 + 40;
     cam.updateProjectionMatrix();
 
+    this.buildLamps(room);
+
     this.controls.target.set(0, Math.min(h / 2, 1.2), 0);
     this.topControls.target.set(0, 0, 0);
     this.resize();
+  }
+
+  /** 天井の照明器具。部屋の広さに応じて 1〜4 灯を配る */
+  buildLamps(room) {
+    const g = this.lampGroup;
+    while (g.children.length) {
+      const c = g.children.pop();
+      c.geometry?.dispose?.();
+      c.material?.dispose?.();
+    }
+    this.lamps = [];
+
+    const nx = Math.min(2, Math.max(1, Math.round(room.w / 7)));
+    const nz = Math.min(2, Math.max(1, Math.round(room.d / 7)));
+    const y = room.h - 0.32;
+    const shade = new THREE.MeshStandardMaterial({
+      color: '#f6efe0',
+      roughness: 0.9,
+      emissive: new THREE.Color('#ffdfae'),
+      emissiveIntensity: 0.2,
+    });
+
+    for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < nz; j++) {
+        const x = nx === 1 ? 0 : (i - (nx - 1) / 2) * (room.w / nx);
+        const z = nz === 1 ? 0 : (j - (nz - 1) / 2) * (room.d / nz);
+
+        const lantern = room.ceiling === 'wood'; // 和室は提灯、それ以外は面付け照明
+        const bulb = new THREE.Mesh(
+          lantern
+            ? new THREE.SphereGeometry(0.19, 20, 14)
+            : new THREE.CylinderGeometry(0.26, 0.26, 0.07, 24),
+          shade
+        );
+        bulb.position.set(x, lantern ? y : room.h - 0.05, z);
+        g.add(bulb);
+
+        if (lantern) {
+          const cord = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6),
+            new THREE.MeshStandardMaterial({ color: '#2a2a2d', roughness: 0.9 })
+          );
+          cord.position.set(x, y + 0.18, z);
+          g.add(cord);
+        }
+
+        const light = new THREE.PointLight(0xffd7a0, 0, Math.max(room.w, room.d) * 1.4, 2);
+        light.position.set(x, y - 0.05, z);
+        g.add(light);
+        this.lamps.push({ light, bulb });
+      }
+    }
+    this.applyLighting();
+  }
+
+  /** 昼（自然光）と夜（店内照明）を切り替える */
+  applyLighting() {
+    const night = this.doc?.room?.light === 'night';
+    const room = this.doc?.room || { w: 12, d: 9, h: 3 };
+
+    this.sun.intensity = night ? 0.25 : 1.9;
+    this.sun.color.set(night ? '#8fa6d8' : '#fff4e2');
+    this.hemi.intensity = night ? 0.16 : 0.5;
+    this.ambient.intensity = night ? 0.1 : 0.25;
+    this.scene.environmentIntensity = night ? 0.22 : 0.65;
+
+    const per = night ? Math.min(26, 8 + (room.w * room.d) / 12) : 0;
+    for (const { light, bulb } of this.lamps) {
+      light.intensity = per;
+      bulb.material.emissiveIntensity = night ? 1.6 : 0.2;
+    }
+    if (this.ceiling) {
+      this.ceiling.material.emissiveIntensity = night ? 0.04 : 0.18;
+    }
   }
 
   // ===== 状態の反映 =====
@@ -364,8 +458,10 @@ export class StoreScene {
       this.doc.room.floor !== doc.room.floor ||
       this.doc.room.wall !== doc.room.wall ||
       this.doc.room.ceiling !== doc.room.ceiling;
+    const lightChanged = !this.doc || this.doc.room.light !== doc.room.light;
     this.doc = doc;
     if (roomChanged) this.buildRoom(doc.room);
+    else if (lightChanged) this.applyLighting();
 
     const seen = new Set();
     for (const item of doc.items) {
@@ -502,6 +598,61 @@ export class StoreScene {
       this.walkPitch = 0;
     }
     this.resize();
+  }
+
+  /** 画質。'high' で陰影（アンビエントオクルージョン）を足す */
+  setQuality(q) {
+    if (q === this.quality) return;
+    this.quality = q;
+    if (q === 'high') this.ensureComposer();
+    else this.disposeComposer();
+  }
+
+  ensureComposer() {
+    if (this.composer) return;
+    const w = this.container.clientWidth || 1;
+    const h = this.container.clientHeight || 1;
+    const composer = new EffectComposer(this.renderer);
+    composer.addPass(new RenderPass(this.scene, this.persp));
+
+    // 隅や什器の足元が落ちる陰影。作り物っぽさが一番減る
+    const gtao = new GTAOPass(this.scene, this.persp, w, h);
+    gtao.updateGtaoMaterial({
+      radius: 0.9,
+      distanceExponent: 1.6,
+      thickness: 1.0,
+      scale: 1.6,
+      samples: 16,
+      screenSpaceRadius: false,
+    });
+    gtao.updatePdMaterial({ lumaPhi: 8, depthPhi: 2, normalPhi: 4, radius: 4, rings: 2, samples: 8 });
+    composer.addPass(gtao);
+    composer.addPass(new OutputPass());
+    composer.setSize(w, h);
+    this.composer = composer;
+    this.gtao = gtao;
+  }
+
+  disposeComposer() {
+    this.gtao?.dispose?.();
+    this.composer?.dispose?.();
+    this.composer = null;
+    this.gtao = null;
+  }
+
+  /** 1フレーム描く（画質設定に応じて経路を変える） */
+  draw() {
+    if (this.composer && this.quality === 'high' && this.camera === this.persp) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+    if (this.labelGroup.visible && this.labelGroup.children.length) {
+      const auto = this.renderer.autoClear;
+      this.renderer.autoClear = false;
+      this.renderer.render(this.labelScene, this.camera);
+      this.renderer.autoClear = auto;
+    }
   }
 
   setPadInput(f, s) {
@@ -713,13 +864,15 @@ export class StoreScene {
 
     this.labelGroup.visible = this.showLabels && this.mode !== 'walk';
     this.updateWalls();
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
   }
 
   resize() {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.composer?.setSize(w, h);
+    this.gtao?.setSize(w, h);
     this.persp.aspect = w / h;
     this.persp.updateProjectionMatrix();
 
@@ -739,7 +892,7 @@ export class StoreScene {
 
   /** 画像として書き出す（PNG dataURL） */
   snapshot() {
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     return this.renderer.domElement.toDataURL('image/png');
   }
 
@@ -758,6 +911,7 @@ export class StoreScene {
     this.topControls.dispose();
     for (const g of this.items.values()) disposeFixture(g);
     for (const t of this.roomTextures) t.dispose();
+    this.disposeComposer();
     this.envRT?.dispose();
     this.renderer.dispose();
     el.remove();

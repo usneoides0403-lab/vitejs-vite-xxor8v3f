@@ -10,7 +10,13 @@ import * as THREE from 'three';
  * 生成結果はモジュール内でキャッシュし、シーン全体で共有する。
  */
 
-const SIZE = 512;
+const SIZE = 640;
+
+/** 端末が対応する異方性フィルタの上限（renderer から渡す） */
+let maxAnisotropy = 8;
+export function setMaxAnisotropy(n) {
+  maxAnisotropy = Math.max(1, Math.min(16, n || 8));
+}
 
 function newCanvas(size = SIZE) {
   const c = document.createElement('canvas');
@@ -156,7 +162,7 @@ function toTexture(canvas, { srgb = false, repeat = 1 } = {}) {
   t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat, repeat);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
+  t.anisotropy = maxAnisotropy;
   return t;
 }
 
@@ -193,7 +199,7 @@ function seamAt(v, pitch, width) {
  * 板張りの床。canvas 1枚 = 2m 角。
  * rows は板の枚数、tone は色味、gloss は艶（roughness）。
  */
-function planks({ rows, light, dark, roughness, seamDepth = 0.06, seamContrast = 0.55 }) {
+function planks({ rows, light, dark, roughness, seamDepth = 0.06, seamContrast = 0.55, size = 896 }) {
   const lightC = rgb(light);
   const darkC = rgb(dark);
   const grainField = field(1, 4, 4);
@@ -212,7 +218,7 @@ function planks({ rows, light, dark, roughness, seamDepth = 0.06, seamContrast =
     const tone = 0.84 + ((r * 37) % 11) / 45; // 板ごとの色ムラ
     const j = Math.max(seamAt(v, rows, seamDepth), seamAt(u + off, 2, 0.035) * 0.8);
     shade(out, base, tone * (1 - j * seamContrast));
-  });
+  }, size);
 
   const height = paintGray((u, v) => {
     const r = Math.floor(v * rows);
@@ -220,9 +226,16 @@ function planks({ rows, light, dark, roughness, seamDepth = 0.06, seamContrast =
     const grain = fineField((u + off) * 3.0, v * (rows * 8));
     const j = Math.max(seamAt(v, rows, seamDepth - 0.01), seamAt(u + off, 2, 0.03));
     return (0.7 + grain * 0.3) * (1 - j);
-  });
+  }, size);
 
-  return { color, height, normalStrength: 2.2, roughness };
+  const polishField = field(3, 3, 3);
+  const rough = paintGray((u, v) => {
+    const j = seamAt(v, rows, seamDepth);
+    const worn = polishField(u, v); // 拭き込みのムラ
+    return clamp01(roughness * (0.82 + worn * 0.36) + j * 0.25);
+  }, size);
+
+  return { color, height, rough, normalStrength: 2.2, roughness };
 }
 
 /** 明るい板張り（縁側・洋室） */
@@ -247,7 +260,7 @@ function darkWoodPlanks() {
  * 1畳 0.91×1.82m を、四半分ごとに向きを変えて風車状に並べる。
  */
 function tatami() {
-  const SZ = 768;
+  const SZ = 896;
   const face = rgb('#c4b78d');
   const deep = rgb('#a2996e');
   const edge = rgb('#3b5a4c'); // 縁（へり）
@@ -328,8 +341,12 @@ function tiles() {
   });
 
   const height = paintGray((u, v) => 1 - grid(u, v) * 0.9);
+  const rough = paintGray((u, v) => {
+    const g = grid(u, v);
+    return mix(0.3, 0.95, g); // 目地はざらざら
+  });
 
-  return { color, height, normalStrength: 3.2, roughness: 0.35 };
+  return { color, height, rough, normalStrength: 3.2, roughness: 0.35 };
 }
 
 /** モルタル・土間。canvas 1枚 = 2m 角 */
@@ -488,7 +505,11 @@ function brushedMetal() {
     (u, v) => lineField(u * 1.0, v * 384) * 0.7 + scratch(u, v) * 0.3,
     SZ
   );
-  return { color, height, normalStrength: 0.45, roughness: 0.28 };
+  const rough = paintGray(
+    (u, v) => clamp01(0.22 + lineField(u, v * 384) * 0.14 + scratch(u, v) * 0.4),
+    SZ
+  );
+  return { color, height, rough, normalStrength: 0.45, roughness: 0.28 };
 }
 
 /** 粉体塗装の金属（棚など）。ごく細かい梨地 */
@@ -550,11 +571,13 @@ export function material(kind, repeat = 1) {
   const build = BUILDERS[kind];
   if (!build) return null;
 
-  const { color, height, normalStrength, roughness } = build();
+  const { color, height, rough, normalStrength, roughness } = build();
   m = {
     map: toTexture(color, { srgb: true, repeat }),
     normalMap: toTexture(heightToNormal(height, normalStrength), { repeat }),
-    roughness,
+    // 艶のムラ。ある場合は roughness を 1 にして、マップの値をそのまま使う
+    roughnessMap: rough ? toTexture(rough, { repeat }) : null,
+    roughness: rough ? 1 : roughness,
   };
   cache.set(key, m);
   return m;
@@ -567,9 +590,11 @@ export function surface(kind, widthM, heightM) {
   const scale = MATERIAL_SCALE[kind] || 2;
   const map = src.map.clone();
   const normalMap = src.normalMap.clone();
-  for (const t of [map, normalMap]) {
+  const roughnessMap = src.roughnessMap ? src.roughnessMap.clone() : null;
+  for (const t of [map, normalMap, roughnessMap]) {
+    if (!t) continue;
     t.needsUpdate = true;
     t.repeat.set(widthM / scale, heightM / scale);
   }
-  return { map, normalMap, roughness: src.roughness };
+  return { map, normalMap, roughnessMap, roughness: src.roughness };
 }
